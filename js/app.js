@@ -29,13 +29,13 @@ window.onload = async function () {
 };
 
 const FALLBACK_DEFAULT_DATA = [
-    { id: 1, latitude: 11.55, longitude: 104.92, acquisition_date: "2026-03-01", confidence: 85, frp: 142.5, region: "Southeast Asia" },
-    { id: 2, latitude: 12.10, longitude: 104.50, acquisition_date: "2026-03-01", confidence: 91, frp: 178.0, region: "Southeast Asia" },
-    { id: 3, latitude: -3.46, longitude: -62.21, acquisition_date: "2026-03-02", confidence: 92, frp: 210.0, region: "Amazon Basin" },
-    { id: 4, latitude: 37.16, longitude: -119.44, acquisition_date: "2026-03-03", confidence: 78, frp: 65.2, region: "California / US West" },
-    { id: 5, latitude: -25.27, longitude: 133.77, acquisition_date: "2026-04-04", confidence: 95, frp: 180.4, region: "Australian Outback" },
-    { id: 6, latitude: 61.52, longitude: 105.31, acquisition_date: "2026-05-05", confidence: 60, frp: 35.8, region: "Siberia / Boreal" },
-    { id: 7, latitude: -1.00, longitude: 22.00, acquisition_date: "2026-06-06", confidence: 88, frp: 115.0, region: "Central Africa" }
+    { id: 1, latitude: 11.55, longitude: 104.92, acquisition_date: "2026-03-01", confidence: 85, frp: 142.5, region: "Southeast Asia", sensor: "VIIRS" },
+    { id: 2, latitude: 12.10, longitude: 104.50, acquisition_date: "2026-03-01", confidence: 91, frp: 178.0, region: "Southeast Asia", sensor: "MODIS" },
+    { id: 3, latitude: -3.46, longitude: -62.21, acquisition_date: "2026-03-02", confidence: 92, frp: 210.0, region: "Amazon Basin", sensor: "VIIRS" },
+    { id: 4, latitude: 37.16, longitude: -119.44, acquisition_date: "2026-03-03", confidence: 78, frp: 65.2, region: "California / US West", sensor: "MODIS" },
+    { id: 5, latitude: -25.27, longitude: 133.77, acquisition_date: "2026-04-04", confidence: 95, frp: 180.4, region: "Australian Outback", sensor: "VIIRS" },
+    { id: 6, latitude: 61.52, longitude: 105.31, acquisition_date: "2026-05-05", confidence: 60, frp: 35.8, region: "Siberia / Boreal", sensor: "MODIS" },
+    { id: 7, latitude: -1.00, longitude: 22.00, acquisition_date: "2026-06-06", confidence: 88, frp: 115.0, region: "Central Africa", sensor: "VIIRS" }
 ];
 
 async function loadInitialData() {
@@ -63,6 +63,8 @@ async function loadInitialData() {
             updateDataStatusBadge("API Data Active", false);
         } else if (DATA_CONFIG.sourceType === 'csv_file') {
             updateDataStatusBadge("Harmonized Data Active", false);
+        } else if (DATA_CONFIG.sourceType === 'parquet_file') {
+            updateDataStatusBadge("Parquet Dataset Active", false);
         } else {
             updateDataStatusBadge("Configured Dataset Active", false);
         }
@@ -92,6 +94,23 @@ async function fetchAndNormalizeProcessedData() {
                 const parsed = Papa.parse(csvText, { header: true, dynamicTyping: true, skipEmptyLines: true });
                 rawRecords = parsed.data || [];
             }
+        } else if (DATA_CONFIG.sourceType === 'parquet_file' || (DATA_CONFIG.fileUrl && DATA_CONFIG.fileUrl.endsWith('.parquet'))) {
+            const response = await fetch(DATA_CONFIG.fileUrl);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const arrayBuffer = await response.arrayBuffer();
+
+            if (typeof hyparquet !== 'undefined') {
+                rawRecords = await new Promise((resolve, reject) => {
+                    hyparquet.parquetRead({
+                        file: arrayBuffer,
+                        rowFormat: 'object',
+                        complete: (data) => resolve(data),
+                        error: (err) => reject(err)
+                    });
+                });
+            } else {
+                throw new Error("hyparquet library is required to parse Parquet files in the browser.");
+            }
         } else if (DATA_CONFIG.sourceType === 'api_endpoint' && DATA_CONFIG.apiEndpointUrl) {
             const response = await fetch(DATA_CONFIG.apiEndpointUrl, {
                 method: 'GET',
@@ -119,6 +138,7 @@ async function fetchAndNormalizeProcessedData() {
             const lon = parseFloat(row[mapping.longitude] || row.longitude || row.lon || 0);
             const dateVal = row[mapping.acquisition_date] || row.acquisition_date || row.date || new Date().toISOString().split('T')[0];
             const dateStr = String(dateVal).split('T')[0];
+            const sensorVal = row[mapping.sensor] || row.sensor || row.sensor_type || 'Harmonized';
 
             return {
                 id: idx + 1,
@@ -127,7 +147,8 @@ async function fetchAndNormalizeProcessedData() {
                 acquisition_date: dateStr,
                 confidence: parseInt(row[mapping.confidence] || row.confidence) || 50,
                 frp: parseFloat(row[mapping.frp] || row.frp) || 10.0,
-                region: row[mapping.region] || row.region || 'Global / API'
+                region: row[mapping.region] || row.region || 'Global / API',
+                sensor: sensorVal
             };
         }).filter(r => r.latitude !== 0 && r.longitude !== 0 && !isNaN(r.latitude) && !isNaN(r.longitude));
 
@@ -171,9 +192,6 @@ function initMap() {
     mapMarkersGroup = L.layerGroup().addTo(map);
 }
 
-/**
- * Haversine distance in kilometers between two lat/lon points
- */
 function calculateDistanceKm(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -185,9 +203,6 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-/**
- * Preset Biome / Hotspot Regime Jump
- */
 function jumpToPresetBiome() {
     const select = document.getElementById('preset-biome-select');
     const selectedBiome = select.value;
@@ -309,7 +324,8 @@ function processUploadedCSV(parsedData, fileName) {
         acquisition_date: String(row.acquisition_date || row.date || new Date().toISOString().split('T')[0]).split('T')[0],
         confidence: parseInt(row.confidence) || 50,
         frp: parseFloat(row.frp) || 10.0,
-        region: row.region || 'Custom Upload'
+        region: row.region || 'Custom Upload',
+        sensor: row.sensor || row.sensor_type || 'Harmonized'
     })).filter(r => r.latitude !== 0 && r.longitude !== 0);
 
     state.rawDataset = normalized;
@@ -352,12 +368,13 @@ async function clearUserCSVData() {
 }
 
 /**
- * Spatial Radius & AOI Filtering with Map Viewport Auto-Focus
+ * Spatial Radius, Region, Sensor & AOI Filtering with Map Auto-Focus
  */
 function applyFilters(shouldZoomMap = false) {
     const startDate = document.getElementById('filter-start-date').value;
     const endDate = document.getElementById('filter-end-date').value;
     const selectedRegion = document.getElementById('filter-region').value;
+    const selectedSensor = document.getElementById('filter-sensor').value;
     const minConf = parseInt(document.getElementById('filter-confidence').value) || 0;
     const minFRP = parseFloat(document.getElementById('filter-frp').value) || 0;
 
@@ -371,6 +388,7 @@ function applyFilters(shouldZoomMap = false) {
     state.filteredDataset = state.rawDataset.filter(item => {
         const matchDate = (!startDate || item.acquisition_date >= startDate) && (!endDate || item.acquisition_date <= endDate);
         const matchRegion = selectedRegion === 'ALL' || item.region === selectedRegion;
+        const matchSensor = selectedSensor === 'ALL' || item.sensor === selectedSensor;
         const matchConf = item.confidence >= minConf;
         const matchFRP = item.frp >= minFRP;
 
@@ -380,10 +398,9 @@ function applyFilters(shouldZoomMap = false) {
             matchCoords = distance <= radiusKm;
         }
 
-        return matchDate && matchRegion && matchConf && matchFRP && matchCoords;
+        return matchDate && matchRegion && matchSensor && matchConf && matchFRP && matchCoords;
     });
 
-    // Render AOI Circle on Map if Coordinates provided
     if (map) {
         if (aoiCircleLayer) {
             map.removeLayer(aoiCircleLayer);
@@ -444,6 +461,7 @@ function resetFilters() {
     document.getElementById('filter-confidence').value = 0;
     document.getElementById('filter-frp').value = 0;
     document.getElementById('filter-region').value = 'ALL';
+    document.getElementById('filter-sensor').value = 'ALL';
     document.getElementById('preset-biome-select').value = '';
     const latInput = document.getElementById('filter-lat');
     const lonInput = document.getElementById('filter-lon');
@@ -469,7 +487,6 @@ function updateMetrics() {
     const avgFrp = data.length > 0 ? (data.reduce((acc, curr) => acc + curr.frp, 0) / data.length) : 0;
     document.getElementById('metric-avg-frp').textContent = avgFrp.toFixed(1);
 
-    // Compute Historical Median FRP Diff
     const rawFrps = raw.map(d => d.frp).sort((a, b) => a - b);
     const medianFrp = rawFrps.length > 0 ? rawFrps[Math.floor(rawFrps.length / 2)] : 0;
     const diffPercent = medianFrp > 0 ? Math.round(((avgFrp - medianFrp) / medianFrp) * 100) : 0;
@@ -479,9 +496,6 @@ function updateMetrics() {
     diffEl.className = `text-xl font-bold font-mono ${diffPercent > 15 ? 'text-red-400' : (diffPercent > 0 ? 'text-amber-400' : 'text-emerald-400')}`;
 }
 
-/**
- * Updates Emergency Anomaly Banner & Peak Activity Period
- */
 function updateEmergencyAnomalyBanner() {
     const data = state.filteredDataset;
     const badge = document.getElementById('anomaly-badge');
@@ -496,7 +510,6 @@ function updateEmergencyAnomalyBanner() {
         return;
     }
 
-    // Calculate Peak Activity Month
     const monthCounts = {};
     data.forEach(d => {
         const ym = d.acquisition_date.slice(0, 7);
@@ -540,6 +553,9 @@ function renderActiveTab() {
     else if (state.activeTab === 'tab-explorer') renderTable();
 }
 
+/**
+ * Updated renderMapHotspots to display sensor type explicitly in popups
+ */
 function renderMapHotspots() {
     if (!map) return;
     mapMarkersGroup.clearLayers();
@@ -561,9 +577,9 @@ function renderMapHotspots() {
                 </div>
                 <div class="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 text-slate-200 font-mono">
                     <div>Date: <span class="text-white">${item.acquisition_date}</span></div>
+                    <div>Sensor: <span class="text-amber-400 font-bold">${item.sensor}</span></div>
                     <div>FRP: <span class="text-amber-400 font-bold">${item.frp} MW</span></div>
-                    <div>Lat: <span class="text-slate-300">${item.latitude}</span></div>
-                    <div>Lon: <span class="text-slate-300">${item.longitude}</span></div>
+                    <div>Lat/Lon: <span class="text-slate-300">${item.latitude}, ${item.longitude}</span></div>
                     <div class="col-span-2">Confidence: <span class="text-emerald-400 font-bold">${item.confidence}%</span></div>
                 </div>
             </div>
@@ -580,9 +596,6 @@ function resetMapBounds() {
     } else map.setView([20, 0], 2);
 }
 
-/**
- * Dual-Mode Burning Activity Calendar (Daily vs Monthly Regime)
- */
 function setCalendarViewMode(mode) {
     state.calendarMode = mode;
     const btnDaily = document.getElementById('btn-cal-daily');
@@ -660,8 +673,8 @@ function showCalendarDayDetails(periodStr, records) {
                 <span class="font-bold text-slate-200">${r.region}</span>
                 <span class="text-slate-500 ml-2">(${r.latitude}, ${r.longitude})</span>
             </div>
-            <div class="flex gap-3 text-slate-300 font-mono">
-                <span>Date: <strong class="text-slate-200">${r.acquisition_date}</strong></span>
+            <div class="flex gap-3 text-slate-300 font-mono text-[11px]">
+                <span>Sensor: <strong class="text-amber-400">${r.sensor}</strong></span>
                 <span>FRP: <strong class="text-amber-400">${r.frp} MW</strong></span>
                 <span>Conf: <strong class="text-emerald-400">${r.confidence}%</strong></span>
             </div>
@@ -683,7 +696,6 @@ function renderCharts() {
         hovermode: 'closest'
     };
 
-    // 1. Time Series Line Chart
     const countsByDay = {};
     data.forEach(d => countsByDay[d.acquisition_date] = (countsByDay[d.acquisition_date] || 0) + 1);
     const dates = Object.keys(countsByDay).sort();
@@ -702,7 +714,6 @@ function renderCharts() {
         yaxis: { title: 'Detections Count', gridcolor: '#1e293b' }
     }, { responsive: true, displayModeBar: false });
 
-    // 2. Dual-Axis Grouped Bar Chart: Hotspots Count & Mean FRP (MW) by Region
     const regCounts = {};
     const regTotalFRP = {};
     data.forEach(d => {
@@ -755,7 +766,6 @@ function renderCharts() {
         legend: { orientation: 'h', y: -0.25, x: 0.25 }
     }, { responsive: true, displayModeBar: false });
 
-    // Cross-filter when clicking either bar series
     document.getElementById('chart-regional').on('plotly_click', function (eventData) {
         if (eventData.points && eventData.points[0]) {
             const clickedRegion = eventData.points[0].x;
@@ -764,11 +774,10 @@ function renderCharts() {
         }
     });
 
-    // 3. Scatter Plot (FRP vs. Detection Confidence)
     Plotly.newPlot('chart-scatter', [{
         x: data.map(d => d.confidence),
         y: data.map(d => d.frp),
-        text: data.map(d => `Region: ${d.region}<br>Date: ${d.acquisition_date}`),
+        text: data.map(d => `Region: ${d.region}<br>Sensor: ${d.sensor}<br>Date: ${d.acquisition_date}`),
         mode: 'markers',
         type: 'scatter',
         marker: { size: 9, color: data.map(d => d.frp), colorscale: 'YlOrRd', showscale: true, colorbar: { thickness: 10, len: 0.8 } },
@@ -780,7 +789,6 @@ function renderCharts() {
         yaxis: { title: 'FRP (MW)', gridcolor: '#1e293b' }
     }, { responsive: true, displayModeBar: false });
 
-    // 4. Regional Proportional Share Donut Chart
     Plotly.newPlot('chart-pie', [{
         labels: regions,
         values: hotspotValues,
@@ -824,6 +832,7 @@ function renderTable() {
             <td class="p-3 text-slate-400">${row.latitude}</td>
             <td class="p-3 text-slate-400">${row.longitude}</td>
             <td class="p-3"><span class="px-2 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700 text-[11px]">${row.region}</span></td>
+            <td class="p-3"><span class="text-amber-300 font-mono">${row.sensor}</span></td>
             <td class="p-3"><span class="text-emerald-400 font-bold">${row.confidence}%</span></td>
             <td class="p-3"><span class="text-amber-400 font-bold">${row.frp} MW</span></td>
         `;
@@ -845,7 +854,8 @@ function filterTable() {
 
     state.filteredDataset = state.rawDataset.filter(item =>
         item.region.toLowerCase().includes(query) ||
-        item.acquisition_date.includes(query)
+        item.acquisition_date.includes(query) ||
+        item.sensor.toLowerCase().includes(query)
     );
 
     state.currentPage = 1;
@@ -871,9 +881,6 @@ function exportFilteredCSV() {
     document.body.removeChild(link);
 }
 
-/**
- * Generates and downloads an Emergency Management Incident Briefing Snapshot
- */
 function exportIncidentBriefing() {
     const data = state.filteredDataset;
     if (data.length === 0) {
@@ -910,7 +917,7 @@ function exportIncidentBriefing() {
             .slice()
             .sort((a, b) => b.frp - a.frp)
             .slice(0, 10)
-            .map((r, i) => `${i + 1}. [${r.acquisition_date}] ${r.region} (${r.latitude}, ${r.longitude}) - FRP: ${r.frp} MW | Conf: ${r.confidence}%`),
+            .map((r, i) => `${i + 1}. [${r.acquisition_date}] ${r.region} (${r.sensor}) - Lat/Lon: (${r.latitude}, ${r.longitude}) - FRP: ${r.frp} MW | Conf: ${r.confidence}%`),
         "===================================================================="
     ].join("\n");
 

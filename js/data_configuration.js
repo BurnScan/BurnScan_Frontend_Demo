@@ -7,13 +7,17 @@
  *   - 'api_endpoint': Connect to a REST API collection returning JSON records
  *   - 'folium_map': Embeds the Python-generated map.html iframe into Tab 1
  */
-require("dotenv").config();
-const KEY = process.env.MAP_KEY;
+// require("dotenv").config();
+// const KEY = process.env.MAP_KEY;
 const DATA_CONFIG = {
 
-    sourceType: 'api_endpoint',
+    // sourceType: 'cvs_file',
+    // fileUrl: './resource/sampleData.csv',
+
+    sourceType: 'parquet_file',
+    fileUrl: '/resource/fires_final.parquet',
     
-    apiEndpointUrl: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${KEY}/VIIRS_NOAA20_NRT/world/1`,
+    //apiEndpointUrl: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${KEY}/VIIRS_NOAA20_NRT/world/1`,
     // apiEndpointUrl: `https://firms.modaps.eosdis.nasa.gov/api/data_availability/csv/${MAP_KEY}/all`,
 
     columnMapping: {
@@ -28,7 +32,6 @@ const DATA_CONFIG = {
     // Active source type: 'synthetic' | 'csv_file' | 'api_endpoint' | 'folium_map'
     //sourceType: 'api_endpoint',
     // File path or API endpoint URL
-    //fileUrl: '/data/sampleData.csv',
     //apiEndpointUrl: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/apikey/VIIRS_NOAA20_NRT/world/1',
     // Include your API key inside request headers or auth parameters
     // apiHeaders: {
