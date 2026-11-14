@@ -18,6 +18,7 @@
                     },
                     zIndex: {
                         '1000': '1000',
+                        '1050': '1050',
                     }
                 }
             }
@@ -31,6 +32,8 @@
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- Hyparquet for Browser Parquet Reading -->
+    <script src="https://unpkg.com/hyparquet@latest/dist/index.umd.js"></script>
 
     <!-- Custom External CSS -->
     <link rel="stylesheet" href="/css/styles.css">
@@ -60,7 +63,8 @@
                         class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-amber-400 border border-amber-500/30">MODIS
                         / VIIRS</span>
                 </h1>
-                <p class="text-xs text-slate-400 hidden sm:block">Early Warning Fire Regime & Burning Activity Calendar</p>
+                <p class="text-xs text-slate-400 hidden sm:block">Early Warning Fire Regime & Burning Activity Calendar
+                </p>
             </div>
         </div>
 
@@ -85,7 +89,7 @@
 
         <!-- SIDEBAR CONTROL PANEL -->
         <aside id="sidebar"
-            class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transition-all duration-300 fixed lg:relative z-30 h-[calc(100vh-4rem)] lg:h-full top-16 lg:top-0 left-0 -translate-x-full lg:translate-x-0 shadow-2xl lg:shadow-none">
+            class=" w-80 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transition-all duration-300 fixed lg:relative z-30 h-[calc(100vh-5rem)] lg:h-[calc(100vh-5rem)] top-20 lg:top-0 left-0 -translate-x-full lg:translate-x-0 shadow-2xl lg:shadow-none overflow-y-auto">
 
             <!-- Mobile Close Header -->
             <div
@@ -98,7 +102,7 @@
             </div>
 
             <!-- Scrollable Sidebar Content Area -->
-            <div class="p-4 overflow-y-auto space-y-5 flex-1">
+            <div class="p-4 space-y-5 flex-1">
                 <!-- Data Source Info -->
                 <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-xs space-y-1.5">
                     <div class="flex justify-between text-slate-400">
@@ -160,6 +164,16 @@
                         </select>
                     </div>
 
+                    <div class="space-y-1">
+                        <label class="text-xs text-slate-300 font-medium">Satellite Sensor</label>
+                        <select id="filter-sensor"
+                            class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500">
+                            <option value="ALL">All Sensors (MODIS & VIIRS)</option>
+                            <option value="VIIRS">VIIRS (375m)</option>
+                            <option value="MODIS">MODIS (1km)</option>
+                        </select>
+                    </div>
+
                     <!-- Spatial Radius / Coordinate Center Filter -->
                     <div class="space-y-2 pt-1 border-t border-slate-800/80">
                         <label class="text-xs text-slate-300 font-medium flex items-center justify-between">
@@ -190,12 +204,7 @@
                         </div>
                     </div>
 
-                    <!-- Explicit Apply Filter Button -->
-                    <button onclick="applyFilters(true)"
-                        class="w-full py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg transition shadow flex items-center justify-center gap-2 cursor-pointer">
-                        <i class="fa-solid fa-filter"></i> Apply AOI Filters
-                    </button>
-
+                    
                     <!-- Confidence -->
                     <div class="space-y-1 pt-1 border-t border-slate-800/80">
                         <div class="flex justify-between text-xs">
@@ -203,10 +212,10 @@
                             <span id="confidence-val" class="font-mono text-amber-400">0%</span>
                         </div>
                         <input type="range" id="filter-confidence" min="0" max="100" value="0" step="5"
-                            class="w-full accent-amber-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer"
-                            oninput="updateRangeLabels()">
+                        class="w-full accent-amber-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer"
+                        oninput="updateRangeLabels()">
                     </div>
-
+                    
                     <!-- FRP -->
                     <div class="space-y-1">
                         <div class="flex justify-between text-xs">
@@ -214,9 +223,14 @@
                             <span id="frp-val" class="font-mono text-amber-400">0 MW</span>
                         </div>
                         <input type="range" id="filter-frp" min="0" max="500" value="0" step="10"
-                            class="w-full accent-amber-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer"
-                            oninput="updateRangeLabels()">
+                        class="w-full accent-amber-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer"
+                        oninput="updateRangeLabels()">
                     </div>
+                    <!-- Explicit Apply Filter Button -->
+                    <button onclick="applyFilters(true)"
+                        class="w-full py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg transition shadow flex items-center justify-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-filter"></i> Apply AOI Filters
+                    </button>
                 </div>
 
                 <!-- Action Buttons -->
@@ -234,14 +248,14 @@
 
             <!-- Sidebar Footer -->
             <div
-                class="p-3 border-t border-slate-800 text-[11px] text-slate-500 flex justify-between items-center shrink-0">
+                class="p-3 border-t border-slate-800 text-[11px] text-slate-500 flex justify-between items-center shrink-0 bg-slate-900">
                 <span>NASA SpaceApps 2026</span>
                 <span class="font-mono text-amber-500/80">v4.0-Proto</span>
             </div>
         </aside>
 
-        <!-- DASHBOARD CONTENT AREA -->
-        <main class="flex-1 flex flex-col overflow-y-auto bg-slate-950 min-w-0 main-scroll-container">
+        <!-- RIGHT DASHBOARD CONTAINER (Scrollable vertically with a sticky tab header) -->
+        <main class="flex-1 flex flex-col bg-slate-950 min-w-0 overflow-y-auto h-[calc(100vh-5rem)]">
 
             <!-- EMERGENCY ANOMALY & RISK STATUS BANNER -->
             <div id="anomaly-alert-banner"
@@ -299,9 +313,9 @@
                 </div>
             </div>
 
-            <!-- TABS NAVIGATION -->
+            <!-- STICKY TABS NAVIGATION HEADER (z-[1050] keeps it strictly above Leaflet panes) -->
             <div
-                class="flex items-center border-b border-slate-800 px-4 bg-slate-900/40 text-sm font-medium overflow-x-auto shrink-0 z-10 backdrop-blur sticky top-0">
+                class="sm:z-0 flex items-center border-b border-slate-800 px-4 bg-slate-900/95 text-sm font-medium overflow-x-auto shrink-0 z-1050 backdrop-blur sticky top-0 shadow-lg">
                 <button onclick="switchTab('tab-map')" id="btn-tab-map"
                     class="st-tab active px-4 py-3 flex items-center gap-2 whitespace-nowrap text-slate-300 hover:text-white">
                     <i class="fa-solid fa-map"></i> 1. Spatial AOI Hotspot Map
@@ -320,19 +334,19 @@
                 </button>
             </div>
 
-            <!-- TAB CONTENT PANELS -->
-            <div class="flex-1 overflow-hidden relative">
+            <!-- TAB CONTENT PANELS CONTAINER -->
+            <div class="flex-1 relative p-4 lg:p-6 space-y-6">
 
-                <!-- TAB 1: MAP -->
-                <div id="tab-map" class="tab-panel flex-1 flex flex-col h-full w-full relative min-h-125">
-                    <div class="relative flex-1 w-full h-full">
-                        <div id="map" class="w-full h-full"></div>
-                        <iframe id="folium-iframe"
-                            class="hidden w-full h-full border-0 absolute inset-0 z-600"></iframe>
+                <!-- TAB 1: MAP (z-0 isolates Leaflet z-index; height fits exact remaining viewport below sticky nav) -->
+                <div id="tab-map"
+                    class="tab-panel flex flex-col w-full relative z-0 h-[calc(100vh-10.25rem)] lg:h-[calc(100vh-11.25rem)] min-h-105">
+                    <div class="relative flex-1 w-full h-full rounded-xl overflow-hidden border border-slate-800">
+                        <div id="map" class="w-full h-full z-0"></div>
+                        <iframe id="folium-iframe" class="hidden w-full h-full border-0 absolute inset-0 z-20"></iframe>
 
-                        <!-- Hotspot Legend with crisp dark background -->
+                        <!-- Hotspot Legend -->
                         <div
-                            class="absolute top-3 left-3 z-1000 bg-slate-900/95 border border-slate-700 p-3 rounded-lg text-xs shadow-xl backdrop-blur text-slate-200 space-y-2 max-w-xs">
+                            class="absolute top-4 left-4 z-30 bg-slate-900/95 border border-slate-700 p-3 rounded-lg text-xs shadow-xl backdrop-blur text-slate-200 space-y-2 max-w-xs">
                             <div
                                 class="font-semibold text-white flex items-center justify-between border-b border-slate-800 pb-1">
                                 <span>Thermal Intensity</span>
@@ -356,8 +370,8 @@
                             </div>
                         </div>
 
-                        <!-- Right-Aligned Floating Map Controls & Custom Interactive Switcher -->
-                        <div class="absolute top-3 right-3 z-1000 flex flex-col gap-3">
+                        <!-- Right-Aligned Floating Map Controls -->
+                        <div class="absolute top-4 right-4 z-30 flex flex-col gap-3">
                             <div
                                 class="flex flex-col shadow-2xl rounded-xl overflow-hidden border border-slate-700 bg-slate-900/95 backdrop-blur">
                                 <button onclick="map.zoomIn()"
@@ -396,7 +410,7 @@
                                 </button>
 
                                 <div id="layer-menu"
-                                    class="hidden absolute right-0 bottom-14 w-48 shadow-2xl rounded-xl border border-slate-700 bg-slate-900/95 backdrop-blur p-2 space-y-1 z-1010 transition-all transform origin-bottom-right">
+                                    class="hidden absolute right-0 bottom-14 w-48 shadow-2xl rounded-xl border border-slate-700 bg-slate-900/95 backdrop-blur p-2 space-y-1 z-40 transition-all transform origin-bottom-right">
                                     <div
                                         class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
                                         Map Basemap
@@ -420,14 +434,16 @@
                 </div>
 
                 <!-- TAB 2: BURNING ACTIVITY CALENDAR -->
-                <div id="tab-calendar" class="tab-panel absolute inset-0 hidden overflow-y-auto p-4 lg:p-6 space-y-6">
+                <div id="tab-calendar" class="tab-panel hidden space-y-6">
                     <div
                         class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 p-4 rounded-xl border border-slate-800">
                         <div>
                             <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
-                                <i class="fa-solid fa-calendar-days text-amber-400"></i> Harmonized Burning Activity Calendar
+                                <i class="fa-solid fa-calendar-days text-amber-400"></i> Harmonized Burning Activity
+                                Calendar
                             </h2>
-                            <p class="text-xs text-slate-400">Visualizing seasonal fire patterns, peak months, and abnormal burning periods</p>
+                            <p class="text-xs text-slate-400">Visualizing seasonal fire patterns, peak months, and
+                                abnormal burning periods</p>
                         </div>
                         <div class="flex items-center gap-2 bg-slate-950 p-1 rounded-lg border border-slate-800">
                             <button onclick="setCalendarViewMode('daily')" id="btn-cal-daily"
@@ -442,13 +458,19 @@
                     </div>
 
                     <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-4">
-                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs text-slate-400">
+                        <div
+                            class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs text-slate-400">
                             <span id="calendar-date-range">Date Range: --</span>
                             <div class="flex flex-wrap items-center gap-3">
-                                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-amber-950/70 border border-amber-800/50"></span> Low / Agricultural</span>
-                                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-amber-600"></span> Moderate</span>
-                                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-orange-600"></span> High</span>
-                                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-red-600"></span> Critical Anomaly</span>
+                                <span class="flex items-center gap-1.5"><span
+                                        class="w-3 h-3 rounded bg-amber-950/70 border border-amber-800/50"></span> Low /
+                                    Agricultural</span>
+                                <span class="flex items-center gap-1.5"><span
+                                        class="w-3 h-3 rounded bg-amber-600"></span> Moderate</span>
+                                <span class="flex items-center gap-1.5"><span
+                                        class="w-3 h-3 rounded bg-orange-600"></span> High</span>
+                                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-red-600"></span>
+                                    Critical Anomaly</span>
                             </div>
                         </div>
                         <div id="calendar-grid"
@@ -468,15 +490,13 @@
                 </div>
 
                 <!-- TAB 3: HISTORICAL ANALYSIS -->
-                <div id="tab-analytics" class="tab-panel absolute inset-0 hidden overflow-y-auto p-4 lg:p-6 space-y-6">
+                <div id="tab-analytics" class="tab-panel hidden space-y-6">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2">
-                            <div class="flex justify-between items-center">
-                                <h3
-                                    class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                                    <i class="fa-solid fa-chart-line text-amber-400"></i> Hotspot Detections Over Time
-                                </h3>
-                            </div>
+                            <h3
+                                class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-chart-line text-amber-400"></i> Hotspot Detections Over Time
+                            </h3>
                             <div id="chart-timeseries" class="w-full h-64"></div>
                         </div>
                         <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2">
@@ -504,13 +524,15 @@
                 </div>
 
                 <!-- TAB 4: DATASET EXPLORER & SCHEMA -->
-                <div id="tab-explorer" class="tab-panel absolute inset-0 hidden overflow-y-auto p-4 lg:p-6 space-y-6">
+                <div id="tab-explorer" class="tab-panel hidden space-y-6">
                     <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
                         <div class="flex justify-between items-center">
                             <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
-                                <i class="fa-solid fa-sitemap text-amber-400"></i> MODIS / VIIRS Schema Harmonization Map
+                                <i class="fa-solid fa-sitemap text-amber-400"></i> MODIS / VIIRS Schema Harmonization
+                                Map
                             </h3>
-                            <span class="text-xs text-slate-400 font-mono">Status: <span class="text-emerald-400">Unified Schema</span></span>
+                            <span class="text-xs text-slate-400 font-mono">Status: <span
+                                    class="text-emerald-400">Unified Schema</span></span>
                         </div>
                         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs"
                             id="schema-mapping-cards"></div>
@@ -524,8 +546,10 @@
                                     class="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 w-full sm:w-64 focus:outline-none focus:border-amber-500"
                                     onkeyup="filterTable()">
                             </div>
-                            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                                <span id="table-record-count" class="text-xs text-slate-400 mr-2">Showing 0 records</span>
+                            <div
+                                class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                                <span id="table-record-count" class="text-xs text-slate-400 mr-2">Showing 0
+                                    records</span>
                                 <button onclick="exportIncidentBriefing()"
                                     class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 text-xs font-bold rounded-lg transition flex items-center gap-1.5">
                                     <i class="fa-solid fa-file-lines"></i> Incident Briefing

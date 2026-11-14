@@ -120,5 +120,11 @@ input[type=number]::-webkit-outer-spin-button {
     -moz-appearance: textfield;
 } */
 
+/* Contain Leaflet internal z-index stacking context */
+#map {
+    isolation: isolate;
+    z-index: 0 !important;
+}
+
 @import "tailwindcss"
 

@@ -677,12 +677,13 @@ function renderCharts() {
         paper_bgcolor: 'transparent',
         plot_bgcolor: 'transparent',
         font: { color: '#94a3b8', family: 'sans-serif', size: 11 },
-        margin: { t: 30, r: 20, l: 40, b: 40 },
+        margin: { t: 35, r: 45, l: 45, b: 45 },
         xaxis: { gridcolor: '#1e293b', zerolinecolor: '#334155' },
         yaxis: { gridcolor: '#1e293b', zerolinecolor: '#334155' },
         hovermode: 'closest'
     };
 
+    // 1. Time Series Line Chart
     const countsByDay = {};
     data.forEach(d => countsByDay[d.acquisition_date] = (countsByDay[d.acquisition_date] || 0) + 1);
     const dates = Object.keys(countsByDay).sort();
@@ -695,21 +696,66 @@ function renderCharts() {
         line: { color: '#f59e0b', width: 3, shape: 'spline' },
         marker: { size: 8, color: '#ef4444' },
         hovertemplate: '<b>Date</b>: %{x}<br><b>Detections</b>: %{y}<extra></extra>'
-    }], { ...layoutTheme, title: { text: 'Daily Detection Trend', font: { size: 12, color: '#f1f5f9' } }, yaxis: { title: 'Detections Count', gridcolor: '#1e293b' } }, { responsive: true, displayModeBar: false });
+    }], {
+        ...layoutTheme,
+        title: { text: 'Daily Detection Trend', font: { size: 12, color: '#f1f5f9' } },
+        yaxis: { title: 'Detections Count', gridcolor: '#1e293b' }
+    }, { responsive: true, displayModeBar: false });
 
+    // 2. Dual-Axis Grouped Bar Chart: Hotspots Count & Mean FRP (MW) by Region
     const regCounts = {};
+    const regTotalFRP = {};
     data.forEach(d => {
         regCounts[d.region] = (regCounts[d.region] || 0) + 1;
+        regTotalFRP[d.region] = (regTotalFRP[d.region] || 0) + d.frp;
     });
 
-    Plotly.newPlot('chart-regional', [{
-        x: Object.keys(regCounts),
-        y: Object.values(regCounts),
-        type: 'bar',
-        marker: { color: '#ef4444', opacity: 0.85 },
-        hovertemplate: '<b>Region</b>: %{x}<br><b>Hotspots</b>: %{y}<extra></extra>'
-    }], { ...layoutTheme, title: { text: 'Hotspots by Region (Click bar to filter)', font: { size: 12, color: '#f1f5f9' } }, yaxis: { title: 'Hotspots Detected', gridcolor: '#1e293b' } }, { responsive: true, displayModeBar: false });
+    const regions = Object.keys(regCounts);
+    const hotspotValues = regions.map(r => regCounts[r]);
+    const meanFrpValues = regions.map(r => +(regTotalFRP[r] / regCounts[r]).toFixed(1));
 
+    Plotly.newPlot('chart-regional', [
+        {
+            x: regions,
+            y: hotspotValues,
+            name: 'Hotspots',
+            type: 'bar',
+            offsetgroup: 1,
+            marker: { color: '#ef4444', opacity: 0.9 },
+            hovertemplate: '<b>Region</b>: %{x}<br><b>Hotspots</b>: %{y}<extra></extra>'
+        },
+        {
+            x: regions,
+            y: meanFrpValues,
+            name: 'Mean FRP (MW)',
+            type: 'bar',
+            yaxis: 'y2',
+            offsetgroup: 2,
+            marker: { color: '#f59e0b', opacity: 0.9 },
+            hovertemplate: '<b>Region</b>: %{x}<br><b>Mean FRP</b>: %{y} MW<extra></extra>'
+        }
+    ], {
+        ...layoutTheme,
+        title: { text: 'Hotspots & Mean FRP by Region (Click bar to filter)', font: { size: 12, color: '#f1f5f9' } },
+        barmode: 'group',
+        yaxis: {
+            title: 'Hotspots',
+            titlefont: { color: '#ef4444' },
+            tickfont: { color: '#ef4444' },
+            gridcolor: '#1e293b'
+        },
+        yaxis2: {
+            title: 'Mean FRP (MW)',
+            titlefont: { color: '#f59e0b' },
+            tickfont: { color: '#f59e0b' },
+            overlaying: 'y',
+            side: 'right',
+            showgrid: false
+        },
+        legend: { orientation: 'h', y: -0.25, x: 0.25 }
+    }, { responsive: true, displayModeBar: false });
+
+    // Cross-filter when clicking either bar series
     document.getElementById('chart-regional').on('plotly_click', function (eventData) {
         if (eventData.points && eventData.points[0]) {
             const clickedRegion = eventData.points[0].x;
@@ -718,6 +764,7 @@ function renderCharts() {
         }
     });
 
+    // 3. Scatter Plot (FRP vs. Detection Confidence)
     Plotly.newPlot('chart-scatter', [{
         x: data.map(d => d.confidence),
         y: data.map(d => d.frp),
@@ -726,16 +773,27 @@ function renderCharts() {
         type: 'scatter',
         marker: { size: 9, color: data.map(d => d.frp), colorscale: 'YlOrRd', showscale: true, colorbar: { thickness: 10, len: 0.8 } },
         hovertemplate: '<b>Confidence</b>: %{x}%<br><b>FRP</b>: %{y} MW<br>%{text}<extra></extra>'
-    }], { ...layoutTheme, title: { text: 'FRP vs. Detection Confidence', font: { size: 12, color: '#f1f5f9' } }, xaxis: { title: 'Confidence (%)', gridcolor: '#1e293b' }, yaxis: { title: 'FRP (MW)', gridcolor: '#1e293b' } }, { responsive: true, displayModeBar: false });
+    }], {
+        ...layoutTheme,
+        title: { text: 'FRP vs. Detection Confidence', font: { size: 12, color: '#f1f5f9' } },
+        xaxis: { title: 'Confidence (%)', gridcolor: '#1e293b' },
+        yaxis: { title: 'FRP (MW)', gridcolor: '#1e293b' }
+    }, { responsive: true, displayModeBar: false });
 
+    // 4. Regional Proportional Share Donut Chart
     Plotly.newPlot('chart-pie', [{
-        labels: Object.keys(regCounts),
-        values: Object.values(regCounts),
+        labels: regions,
+        values: hotspotValues,
         type: 'pie',
         hole: 0.55,
         marker: { colors: ['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899'] },
         hovertemplate: '<b>%{label}</b>: %{value} hotspots (%{percent})<extra></extra>'
-    }], { ...layoutTheme, title: { text: 'Regional Proportional Share', font: { size: 12, color: '#f1f5f9' } }, showlegend: true, legend: { orientation: 'h', y: -0.2 } }, { responsive: true, displayModeBar: false });
+    }], {
+        ...layoutTheme,
+        title: { text: 'Regional Proportional Share', font: { size: 12, color: '#f1f5f9' } },
+        showlegend: true,
+        legend: { orientation: 'h', y: -0.2 }
+    }, { responsive: true, displayModeBar: false });
 }
 
 function renderTable() {
