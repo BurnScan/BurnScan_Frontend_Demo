@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BurnScan | MODIS & VIIRS Fire Hotspot Harmonization</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        fire: { 50: '#fffbe1', 100: '#fff3b8', 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f', 950: '#451a03' },
+                        flame: { 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c' }
+                    },
+                    zIndex: {
+                        '1000': '1000',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- External Assets & Libraries -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Custom External CSS -->
+    <link rel="stylesheet" href="/css/styles.css">
+
+    <!-- External Configuration & Application Logic -->
+    <script src="/js/data_configuration.js"></script>
+    <script src="/js/app.js" defer></script>
+</head>
+
+<body class="min-h-full flex flex-col font-sans antialiased bg-slate-950 text-slate-100">
+
+    <!-- HEADER -->
+    <header
+        class="h-20 bg-slate-800 border-b border-slate-800 flex items-center justify-between px-4 lg:px-6 z-20 shrink-0 top-0 sticky">
+        <div class="flex items-center space-x-5">
+            <button id="sidebar-toggle"
+                class="lg:hidden text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+            <div class="size-12">
+                <img src="/resource/photo_2026-10-26_17-03-26.jpg" alt="BurnScan Logo"
+                    class="border-0 rounded-lg shadow-sm shadow-amber-800">
+            </div>
+            <div>
+                <h1 class="text-base sm:text-lg font-bold tracking-wide text-white flex items-center gap-2">
+                    BurnScan <span
+                        class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-amber-400 border border-amber-500/30">MODIS
+                        / VIIRS</span>
+                </h1>
+                <p class="text-xs text-slate-400 hidden sm:block">Early Warning Fire Regime & Burning Activity Calendar</p>
+            </div>
+        </div>
+
+        <!-- Data Source Status Label & Action Buttons -->
+        <div class="flex items-center gap-2 sm:gap-3">
+            <div id="data-status-badge"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                <span id="data-status-text">Awaiting Data Source</span>
+            </div>
+            <button onclick="triggerFileUpload()"
+                class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg flex items-center gap-2 transition">
+                <i class="fa-solid fa-upload text-amber-400"></i>
+                <span class="hidden md:inline">Upload CSV</span>
+            </button>
+            <input type="file" id="csv-file-input" accept=".csv" class="hidden" onchange="handleFileUpload(event)" />
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- SIDEBAR CONTROL PANEL -->
+        <aside id="sidebar"
+            class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transition-all duration-300 fixed lg:relative z-30 h-[calc(100vh-4rem)] lg:h-full top-16 lg:top-0 left-0 -translate-x-full lg:translate-x-0 shadow-2xl lg:shadow-none">
+
+            <!-- Mobile Close Header -->
+            <div
+                class="flex lg:hidden items-center justify-between p-4 border-b border-slate-800 bg-slate-950/40 shrink-0">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Emergency AOI Controls</span>
+                <button id="sidebar-close"
+                    class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+
+            <!-- Scrollable Sidebar Content Area -->
+            <div class="p-4 overflow-y-auto space-y-5 flex-1">
+                <!-- Data Source Info -->
+                <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-xs space-y-1.5">
+                    <div class="flex justify-between text-slate-400">
+                        <span>Latest Satellite Pass:</span>
+                        <span id="latest-obs-date" class="font-mono text-slate-200">--</span>
+                    </div>
+                    <div class="flex justify-between text-slate-400">
+                        <span>Harmonized Records:</span>
+                        <span id="sidebar-total-records" class="font-mono text-amber-400 font-bold">0</span>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="space-y-4">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-crosshairs text-amber-500"></i> Area of Interest (AOI)
+                    </h3>
+
+                    <!-- Quick Biome / Hotspot Preset Jump -->
+                    <div class="space-y-1">
+                        <label class="text-xs text-slate-300 font-medium">Quick Biome / Fire Regime Jump</label>
+                        <select id="preset-biome-select" onchange="jumpToPresetBiome()"
+                            class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-amber-300 focus:outline-none focus:border-amber-500">
+                            <option value="">-- Jump to Major Fire Region --</option>
+                            <option value="Southeast Asia">Southeast Asia (Mekong / Sumatra)</option>
+                            <option value="Amazon Basin">Amazon Basin (South America)</option>
+                            <option value="California / US West">California / US West</option>
+                            <option value="Australian Outback">Australian Outback</option>
+                            <option value="Siberia / Boreal">Siberia / Boreal Forest</option>
+                            <option value="Central Africa">Central Africa Savanna</option>
+                        </select>
+                    </div>
+
+                    <!-- Interactive Date Range -->
+                    <div class="space-y-1 pt-1 border-t border-slate-800/80">
+                        <label class="text-xs text-slate-300 font-medium">Observation Window</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div onclick="document.getElementById('filter-start-date').showPicker?.()"
+                                class="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 cursor-pointer hover:border-amber-500/50 transition">
+                                <span class="text-[10px] text-slate-500 block">From</span>
+                                <input type="date" id="filter-start-date"
+                                    class="bg-transparent w-full text-xs text-slate-200 focus:outline-none cursor-pointer">
+                            </div>
+                            <div onclick="document.getElementById('filter-end-date').showPicker?.()"
+                                class="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 cursor-pointer hover:border-amber-500/50 transition">
+                                <span class="text-[10px] text-slate-500 block">To</span>
+                                <input type="date" id="filter-end-date"
+                                    class="bg-transparent w-full text-xs text-slate-200 focus:outline-none cursor-pointer">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Region Selector -->
+                    <div class="space-y-1">
+                        <label class="text-xs text-slate-300 font-medium">Dataset Region Filter</label>
+                        <select id="filter-region"
+                            class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500">
+                            <option value="ALL">All Regions (Global)</option>
+                        </select>
+                    </div>
+
+                    <!-- Spatial Radius / Coordinate Center Filter -->
+                    <div class="space-y-2 pt-1 border-t border-slate-800/80">
+                        <label class="text-xs text-slate-300 font-medium flex items-center justify-between">
+                            <span>Spatial Radius Search</span>
+                            <span class="text-[10px] text-slate-500">AOI Center</span>
+                        </label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="relative z-20">
+                                <span class="text-[10px] text-slate-500">Latitude</span>
+                                <input type="text" id="filter-lat" inputmode="decimal" placeholder="e.g. 11.55"
+                                    class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono relative z-20">
+                            </div>
+                            <div class="relative z-20">
+                                <span class="text-[10px] text-slate-500">Longitude</span>
+                                <input type="text" id="filter-lon" inputmode="decimal" placeholder="e.g. 104.9"
+                                    class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono relative z-20">
+                            </div>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-500">Search Radius (km)</span>
+                            <select id="filter-radius"
+                                class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono mt-0.5">
+                                <option value="50">50 km (Local Incident)</option>
+                                <option value="150">150 km (District / Park)</option>
+                                <option value="300" selected>300 km (Regional Sector)</option>
+                                <option value="600">600 km (Broad Sub-Region)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Explicit Apply Filter Button -->
+                    <button onclick="applyFilters(true)"
+                        class="w-full py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg transition shadow flex items-center justify-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-filter"></i> Apply AOI Filters
+                    </button>
+
+                    <!-- Confidence -->
+                    <div class="space-y-1 pt-1 border-t border-slate-800/80">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium">Min Sensor Confidence</label>
+                            <span id="confidence-val" class="font-mono text-amber-400">0%</span>
+                        </div>
+                        <input type="range" id="filter-confidence" min="0" max="100" value="0" step="5"
+                            class="w-full accent-amber-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer"
+                            oninput="updateRangeLabels()">
+                    </div>
+
+                    <!-- FRP -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs">
+                            <label class="text-slate-300 font-medium">Min Intensity FRP (MW)</label>
+                            <span id="frp-val" class="font-mono text-amber-400">0 MW</span>
+                        </div>
+                        <input type="range" id="filter-frp" min="0" max="500" value="0" step="10"
+                            class="w-full accent-amber-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer"
+                            oninput="updateRangeLabels()">
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="pt-2 space-y-2">
+                    <button onclick="resetFilters()"
+                        class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition flex items-center justify-center gap-2 border border-slate-700">
+                        <i class="fa-solid fa-rotate-left text-amber-400"></i> Reset All Filters
+                    </button>
+                    <button onclick="clearUserCSVData()"
+                        class="w-full py-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-lg text-xs font-medium transition border border-slate-800 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-trash-can text-red-400"></i> Clear User CSV Data
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sidebar Footer -->
+            <div
+                class="p-3 border-t border-slate-800 text-[11px] text-slate-500 flex justify-between items-center shrink-0">
+                <span>NASA SpaceApps 2026</span>
+                <span class="font-mono text-amber-500/80">v4.0-Proto</span>
+            </div>
+        </aside>
+
+        <!-- DASHBOARD CONTENT AREA -->
+        <main class="flex-1 flex flex-col overflow-y-auto bg-slate-950 min-w-0 main-scroll-container">
+
+            <!-- EMERGENCY ANOMALY & RISK STATUS BANNER -->
+            <div id="anomaly-alert-banner"
+                class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <span id="anomaly-badge"
+                        class="px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1.5">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Baseline Normal
+                    </span>
+                    <span id="anomaly-description" class="text-slate-300">
+                        Monitoring active thermal anomalies across selected AOI.
+                    </span>
+                </div>
+                <div class="text-[11px] font-mono text-slate-400">
+                    Peak Activity Period: <strong id="metric-peak-period" class="text-amber-400">--</strong>
+                </div>
+            </div>
+
+            <!-- EMERGENCY MANAGEMENT METRICS SUMMARY -->
+            <div class="bg-slate-900/80 border-b border-slate-800 p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
+                <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800/80 flex items-center gap-3">
+                    <div class="p-2.5 rounded-lg bg-amber-500/10 text-amber-400"><i
+                            class="fa-solid fa-fire text-lg"></i></div>
+                    <div>
+                        <div class="text-[11px] font-medium text-slate-400 uppercase">Detected Hotspots</div>
+                        <div id="metric-total-hotspots" class="text-xl font-bold font-mono text-slate-100">0</div>
+                    </div>
+                </div>
+                <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800/80 flex items-center gap-3">
+                    <div class="p-2.5 rounded-lg bg-orange-500/10 text-orange-400"><i
+                            class="fa-solid fa-calendar-check text-lg"></i></div>
+                    <div>
+                        <div class="text-[11px] font-medium text-slate-400 uppercase">Active Fire Days</div>
+                        <div id="metric-active-days" class="text-xl font-bold font-mono text-slate-100">0</div>
+                    </div>
+                </div>
+                <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800/80 flex items-center gap-3">
+                    <div class="p-2.5 rounded-lg bg-red-500/10 text-red-400"><i class="fa-solid fa-bolt text-lg"></i>
+                    </div>
+                    <div>
+                        <div class="text-[11px] font-medium text-slate-400 uppercase">Mean FRP Intensity</div>
+                        <div class="flex items-baseline gap-1">
+                            <span id="metric-avg-frp" class="text-xl font-bold font-mono text-slate-100">0.0</span>
+                            <span class="text-[10px] text-slate-500 font-mono">MW</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800/80 flex items-center gap-3">
+                    <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i
+                            class="fa-solid fa-chart-simple text-lg"></i></div>
+                    <div>
+                        <div class="text-[11px] font-medium text-slate-400 uppercase">Historical Median Diff</div>
+                        <div id="metric-median-diff" class="text-xl font-bold font-mono text-emerald-400">+0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABS NAVIGATION -->
+            <div
+                class="flex items-center border-b border-slate-800 px-4 bg-slate-900/40 text-sm font-medium overflow-x-auto shrink-0 z-10 backdrop-blur sticky top-0">
+                <button onclick="switchTab('tab-map')" id="btn-tab-map"
+                    class="st-tab active px-4 py-3 flex items-center gap-2 whitespace-nowrap text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-map"></i> 1. Spatial AOI Hotspot Map
+                </button>
+                <button onclick="switchTab('tab-calendar')" id="btn-tab-calendar"
+                    class="st-tab px-4 py-3 flex items-center gap-2 whitespace-nowrap text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-calendar-days"></i> 2. Burning Activity Calendar
+                </button>
+                <button onclick="switchTab('tab-analytics')" id="btn-tab-analytics"
+                    class="st-tab px-4 py-3 flex items-center gap-2 whitespace-nowrap text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-chart-line"></i> 3. Multi-Year & Regime Analytics
+                </button>
+                <button onclick="switchTab('tab-explorer')" id="btn-tab-explorer"
+                    class="st-tab px-4 py-3 flex items-center gap-2 whitespace-nowrap text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-file-export"></i> 4. Incident Logs & Export
+                </button>
+            </div>
+
+            <!-- TAB CONTENT PANELS -->
+            <div class="flex-1 overflow-hidden relative">
+
+                <!-- TAB 1: MAP -->
+                <div id="tab-map" class="tab-panel flex-1 flex flex-col h-full w-full relative min-h-125">
+                    <div class="relative flex-1 w-full h-full">
+                        <div id="map" class="w-full h-full"></div>
+                        <iframe id="folium-iframe"
+                            class="hidden w-full h-full border-0 absolute inset-0 z-600"></iframe>
+
+                        <!-- Hotspot Legend with crisp dark background -->
+                        <div
+                            class="absolute top-3 left-3 z-1000 bg-slate-900/95 border border-slate-700 p-3 rounded-lg text-xs shadow-xl backdrop-blur text-slate-200 space-y-2 max-w-xs">
+                            <div
+                                class="font-semibold text-white flex items-center justify-between border-b border-slate-800 pb-1">
+                                <span>Thermal Intensity</span>
+                                <span class="text-[10px] text-slate-400">FRP (MW)</span>
+                            </div>
+                            <div class="space-y-1.5 pt-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-3 h-3 rounded-full bg-red-600 border border-red-400 shrink-0"></span>
+                                    <span class="text-slate-200">Extreme Wildfire (> 150 MW)</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="w-3 h-3 rounded-full bg-amber-500 border border-amber-300 shrink-0"></span>
+                                    <span class="text-slate-200">Active Forest / Brush (50-150 MW)</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="w-3 h-3 rounded-full bg-yellow-400 border border-yellow-200 shrink-0"></span>
+                                    <span class="text-slate-200">Agricultural / Low (< 50 MW)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right-Aligned Floating Map Controls & Custom Interactive Switcher -->
+                        <div class="absolute top-3 right-3 z-1000 flex flex-col gap-3">
+                            <div
+                                class="flex flex-col shadow-2xl rounded-xl overflow-hidden border border-slate-700 bg-slate-900/95 backdrop-blur">
+                                <button onclick="map.zoomIn()"
+                                    class="p-3 text-slate-300 hover:text-white hover:bg-slate-800 border-b border-slate-800 transition flex items-center justify-center"
+                                    title="Zoom In">
+                                    <i class="fa-solid fa-plus text-sm"></i>
+                                </button>
+                                <button onclick="map.zoomOut()"
+                                    class="p-3 text-slate-300 hover:text-white hover:bg-slate-800 border-b border-slate-800 transition flex items-center justify-center"
+                                    title="Zoom Out">
+                                    <i class="fa-solid fa-minus text-sm"></i>
+                                </button>
+                                <button onclick="resetMapBounds()"
+                                    class="p-3 text-slate-300 hover:text-white hover:bg-slate-800 border-b border-slate-800 transition flex items-center justify-center"
+                                    title="Fit AOI Hotspots">
+                                    <i class="fa-solid fa-location-arrow text-sm"></i>
+                                </button>
+                                <button onclick="locateUser()"
+                                    class="p-3 text-slate-300 hover:text-white hover:bg-slate-800 border-b border-slate-800 transition flex items-center justify-center"
+                                    title="My Location">
+                                    <i class="fa-solid fa-crosshairs text-sm"></i>
+                                </button>
+                                <button onclick="toggleMapFullscreen()"
+                                    class="p-3 text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center justify-center"
+                                    title="Toggle Fullscreen">
+                                    <i class="fa-solid fa-expand text-sm"></i>
+                                </button>
+                            </div>
+
+                            <!-- Custom Interactive Layer Switcher Widget -->
+                            <div class="relative">
+                                <button onclick="toggleLayerMenu()"
+                                    class="w-11 h-11 shadow-2xl rounded-xl border border-slate-700 bg-slate-900/95 backdrop-blur text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center justify-center"
+                                    title="Change Map Style">
+                                    <i class="fa-solid fa-layer-group text-sm text-amber-400"></i>
+                                </button>
+
+                                <div id="layer-menu"
+                                    class="hidden absolute right-0 bottom-14 w-48 shadow-2xl rounded-xl border border-slate-700 bg-slate-900/95 backdrop-blur p-2 space-y-1 z-1010 transition-all transform origin-bottom-right">
+                                    <div
+                                        class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                                        Map Basemap
+                                    </div>
+                                    <button onclick="switchBaseLayer('standard')" id="btn-layer-standard"
+                                        class="w-full px-3 py-2 rounded-lg text-xs font-medium text-left flex items-center justify-between bg-amber-500/10 text-amber-400 border border-amber-500/30 transition">
+                                        <span class="flex items-center gap-2"><i class="fa-solid fa-map"></i> Standard
+                                            Map</span>
+                                        <i class="fa-solid fa-check text-[10px]"></i>
+                                    </button>
+                                    <button onclick="switchBaseLayer('satellite')" id="btn-layer-satellite"
+                                        class="w-full px-3 py-2 rounded-lg text-xs font-medium text-left flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                                        <span class="flex items-center gap-2"><i class="fa-solid fa-earth-americas"></i>
+                                            Satellite View</span>
+                                        <i class="fa-solid fa-check text-[10px] hidden"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: BURNING ACTIVITY CALENDAR -->
+                <div id="tab-calendar" class="tab-panel absolute inset-0 hidden overflow-y-auto p-4 lg:p-6 space-y-6">
+                    <div
+                        class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 p-4 rounded-xl border border-slate-800">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                                <i class="fa-solid fa-calendar-days text-amber-400"></i> Harmonized Burning Activity Calendar
+                            </h2>
+                            <p class="text-xs text-slate-400">Visualizing seasonal fire patterns, peak months, and abnormal burning periods</p>
+                        </div>
+                        <div class="flex items-center gap-2 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                            <button onclick="setCalendarViewMode('daily')" id="btn-cal-daily"
+                                class="px-3 py-1.5 rounded-md text-xs font-bold bg-amber-500 text-slate-950 transition">
+                                Daily Matrix
+                            </button>
+                            <button onclick="setCalendarViewMode('monthly')" id="btn-cal-monthly"
+                                class="px-3 py-1.5 rounded-md text-xs font-medium text-slate-400 hover:text-white transition">
+                                Monthly Regime
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-4">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs text-slate-400">
+                            <span id="calendar-date-range">Date Range: --</span>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-amber-950/70 border border-amber-800/50"></span> Low / Agricultural</span>
+                                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-amber-600"></span> Moderate</span>
+                                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-orange-600"></span> High</span>
+                                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-red-600"></span> Critical Anomaly</span>
+                            </div>
+                        </div>
+                        <div id="calendar-grid"
+                            class="grid grid-cols-3 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-12 gap-2 pt-2"></div>
+                    </div>
+
+                    <div id="calendar-day-details"
+                        class="hidden bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-3">
+                        <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                            <h3 id="selected-day-title" class="text-sm font-bold text-amber-400">Period Details</h3>
+                            <span id="selected-day-count"
+                                class="text-xs bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-full border border-amber-500/20">0
+                                hotspots</span>
+                        </div>
+                        <div id="selected-day-list" class="max-h-60 overflow-y-auto space-y-2 text-xs"></div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: HISTORICAL ANALYSIS -->
+                <div id="tab-analytics" class="tab-panel absolute inset-0 hidden overflow-y-auto p-4 lg:p-6 space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <div class="flex justify-between items-center">
+                                <h3
+                                    class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fa-solid fa-chart-line text-amber-400"></i> Hotspot Detections Over Time
+                                </h3>
+                            </div>
+                            <div id="chart-timeseries" class="w-full h-64"></div>
+                        </div>
+                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <h3
+                                class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-chart-bar text-amber-400"></i> Hotspots & FRP by Region
+                            </h3>
+                            <div id="chart-regional" class="w-full h-64"></div>
+                        </div>
+                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <h3
+                                class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-circle-scatter text-amber-400"></i> FRP vs. Detection Confidence
+                            </h3>
+                            <div id="chart-scatter" class="w-full h-64"></div>
+                        </div>
+                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <h3
+                                class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-chart-pie text-amber-400"></i> Regional Proportional Share
+                            </h3>
+                            <div id="chart-pie" class="w-full h-64"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: DATASET EXPLORER & SCHEMA -->
+                <div id="tab-explorer" class="tab-panel absolute inset-0 hidden overflow-y-auto p-4 lg:p-6 space-y-6">
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                                <i class="fa-solid fa-sitemap text-amber-400"></i> MODIS / VIIRS Schema Harmonization Map
+                            </h3>
+                            <span class="text-xs text-slate-400 font-mono">Status: <span class="text-emerald-400">Unified Schema</span></span>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs"
+                            id="schema-mapping-cards"></div>
+                    </div>
+
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-4">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                            <div class="flex items-center gap-2 w-full sm:w-auto">
+                                <i class="fa-solid fa-magnifying-glass text-slate-500"></i>
+                                <input type="text" id="table-search" placeholder="Search records by region or date..."
+                                    class="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-200 w-full sm:w-64 focus:outline-none focus:border-amber-500"
+                                    onkeyup="filterTable()">
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                                <span id="table-record-count" class="text-xs text-slate-400 mr-2">Showing 0 records</span>
+                                <button onclick="exportIncidentBriefing()"
+                                    class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 text-xs font-bold rounded-lg transition flex items-center gap-1.5">
+                                    <i class="fa-solid fa-file-lines"></i> Incident Briefing
+                                </button>
+                                <button onclick="exportFilteredCSV()"
+                                    class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg transition flex items-center gap-1.5 shadow">
+                                    <i class="fa-solid fa-download"></i> Export CSV
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-lg border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead
+                                    class="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800 font-mono">
+                                    <tr>
+                                        <th class="p-3">Acquisition Date</th>
+                                        <th class="p-3">Latitude</th>
+                                        <th class="p-3">Longitude</th>
+                                        <th class="p-3">Region</th>
+                                        <th class="p-3">Confidence</th>
+                                        <th class="p-3">FRP (MW)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="data-table-body" class="divide-y divide-slate-800/60 font-mono"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="flex justify-between items-center text-xs text-slate-400 pt-2">
+                            <button onclick="changePage(-1)" id="btn-prev-page"
+                                class="px-3 py-1 bg-slate-950 hover:bg-slate-800 rounded border border-slate-800 disabled:opacity-40">Previous</button>
+                            <span id="page-indicator">Page 1 of 1</span>
+                            <button onclick="changePage(1)" id="btn-next-page"
+                                class="px-3 py-1 bg-slate-950 hover:bg-slate-800 rounded border border-slate-800 disabled:opacity-40">Next</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>

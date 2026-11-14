@@ -1,0 +1,124 @@
+/* Custom scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+}
+
+.leaflet-container {
+    background-color: #090d16 !important;
+    font-family: inherit;
+}
+
+/* Streamlit style tab buttons */
+.st-tab {
+    position: relative;
+    transition: all 0.2s ease;
+}
+.st-tab.active {
+    color: #f59e0b;
+    border-bottom: 2px solid #f59e0b;
+}
+.st-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: #f59e0b;
+    box-shadow: 0 0 8px #f59e0b;
+}
+
+/* Ensure smooth scrolling globally on mobile and desktop */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: #020617;
+}
+
+.main-scroll-container {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Customizes Leaflet Layer Control Switcher Box */
+.leaflet-control-layers {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.leaflet-control-layers-toggle {
+    background-image: none !important;
+    width: 44px !important;
+    height: 44px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: #cbd5e1;
+    text-decoration: none;
+}
+.leaflet-control-layers-toggle::before {
+    content: "\f5a0";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    font-size: 14px;
+}
+.leaflet-control-layers-toggle:hover {
+    color: #fff;
+    background-color: rgb(30 41 59);
+}
+.leaflet-control-layers-expanded {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+    padding: 12px !important;
+    border-radius: 0.75rem !important;
+    min-width: 160px;
+    box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+}
+.leaflet-control-layers label {
+    font-size: 12px !important;
+    cursor: pointer;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+/* Customizes Leaflet Popup Background & Border to Match Slate Theme */
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5) !important;
+}
+
+.leaflet-popup-content {
+    color: #cbd5e1 !important;
+}
+
+/* Remove spinner arrows from number inputs globally */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
+}
+/* input[type=number] {
+    -moz-appearance: textfield;
+} */
+
+@import "tailwindcss"
+
